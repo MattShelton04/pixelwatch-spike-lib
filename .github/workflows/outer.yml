@@ -1,0 +1,59 @@
+# PixelWatch M0.5 spike S4: nested call inside the library (outer -> ./report.yml).
+name: Spike outer (reusable, nested)
+
+on:
+  workflow_call:
+    outputs:
+      outer-workflow-repository:
+        value: ${{ jobs.probe.outputs.workflow-repository }}
+      outer-workflow-sha:
+        value: ${{ jobs.probe.outputs.workflow-sha }}
+      ingest-bundle:
+        value: ${{ jobs.inner.outputs.ingest-bundle }}
+      ingest-nonce:
+        value: ${{ jobs.inner.outputs.ingest-nonce }}
+      ingest-workflow-repository:
+        value: ${{ jobs.inner.outputs.ingest-workflow-repository }}
+      ingest-workflow-sha:
+        value: ${{ jobs.inner.outputs.ingest-workflow-sha }}
+      project-bundle:
+        value: ${{ jobs.inner.outputs.project-bundle }}
+      project-nonce:
+        value: ${{ jobs.inner.outputs.project-nonce }}
+      project-workflow-repository:
+        value: ${{ jobs.inner.outputs.project-workflow-repository }}
+      project-workflow-sha:
+        value: ${{ jobs.inner.outputs.project-workflow-sha }}
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      workflow-repository: ${{ steps.log.outputs.repo }}
+      workflow-sha: ${{ steps.log.outputs.sha }}
+    steps:
+      - name: Log job fields of the outer workflow
+        id: log
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+          WF_REF: ${{ job.workflow_ref }}
+        run: |
+          echo "job.workflow_repository=${WF_REPO}"
+          echo "job.workflow_sha=${WF_SHA}"
+          echo "job.workflow_ref=${WF_REF}"
+          echo "repo=${WF_REPO}" >> "$GITHUB_OUTPUT"
+          echo "sha=${WF_SHA}" >> "$GITHUB_OUTPUT"
+
+  inner:
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/report.yml

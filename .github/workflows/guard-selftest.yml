@@ -1,0 +1,67 @@
+# PixelWatch M0.5 spike S4: the report.yml guard must fail on missing or moving-ref fields.
+# The guard text is a copy of the one in report.yml (it has to run before any checkout).
+name: Spike guard self-test
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  guard:
+    name: guard (${{ matrix.case.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - { name: both-blank, repo: "", sha: "" }
+          - { name: repo-blank, repo: "", sha: "0123456789abcdef0123456789abcdef01234567" }
+          - { name: sha-blank, repo: "MattShelton04/pixelwatch-spike-lib", sha: "" }
+          - { name: sha-is-branch, repo: "MattShelton04/pixelwatch-spike-lib", sha: "main" }
+          - { name: sha-is-tag, repo: "MattShelton04/pixelwatch-spike-lib", sha: "v0.0.1" }
+          - { name: sha-short, repo: "MattShelton04/pixelwatch-spike-lib", sha: "0123456" }
+    steps:
+      - name: Guard self-reference fields
+        id: guard
+        continue-on-error: true
+        env:
+          WF_REPO: ${{ matrix.case.repo }}
+          WF_SHA: ${{ matrix.case.sha }}
+        run: |
+          set -euo pipefail
+          echo "job.workflow_repository=${WF_REPO}"
+          echo "job.workflow_sha=${WF_SHA}"
+          if [[ ! "${WF_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::job.workflow_repository is missing or malformed"; exit 1
+          fi
+          if [[ ! "${WF_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::job.workflow_sha is missing or not a full commit SHA"; exit 1
+          fi
+          echo "repo=${WF_REPO}" >> "$GITHUB_OUTPUT"
+          echo "sha=${WF_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Expect the guard to have failed
+        env:
+          OUTCOME: ${{ steps.guard.outcome }}
+        run: |
+          echo "guard outcome: ${OUTCOME}"
+          test "${OUTCOME}" = failure
+
+  direct-fields:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Log job fields in a direct (non-reusable) run
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+          WF_REF: ${{ job.workflow_ref }}
+          CALLER_SHA: ${{ github.sha }}
+        run: |
+          echo "job.workflow_repository=${WF_REPO}"
+          echo "job.workflow_sha=${WF_SHA}"
+          echo "job.workflow_ref=${WF_REF}"
+          echo "github.sha=${CALLER_SHA}"

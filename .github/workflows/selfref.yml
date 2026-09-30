@@ -1,0 +1,34 @@
+# PixelWatch M0.5 spike S4 (extra): GitHub's self-repository syntax (changelog 2026-07-30).
+# Runs the bundled action with `uses: $/...` and no checkout.
+name: Spike selfref (reusable)
+
+on:
+  workflow_call:
+    outputs:
+      bundle:
+        value: ${{ jobs.selfref.outputs.bundle }}
+      nonce:
+        value: ${{ jobs.selfref.outputs.nonce }}
+
+permissions: {}
+
+jobs:
+  selfref:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      bundle: ${{ steps.bundle.outputs.bundle }}
+      nonce: ${{ steps.bundle.outputs.nonce }}
+    steps:
+      - name: Log job fields
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+        run: |
+          echo "job.workflow_repository=${WF_REPO} job.workflow_sha=${WF_SHA}"
+          echo "workspace contents (expected empty, nothing checked out):"
+          ls -la
+      - name: Run bundled action via $/
+        id: bundle
+        uses: $/actions/publish

@@ -1,0 +1,26 @@
+# PixelWatch M0.5 spike S4 (extra): nested call through the self-repository syntax.
+name: Spike outer via $/ (reusable, nested)
+
+on:
+  workflow_call:
+    outputs:
+      ingest-bundle:
+        value: ${{ jobs.inner.outputs.ingest-bundle }}
+      ingest-nonce:
+        value: ${{ jobs.inner.outputs.ingest-nonce }}
+      ingest-workflow-sha:
+        value: ${{ jobs.inner.outputs.ingest-workflow-sha }}
+      project-workflow-sha:
+        value: ${{ jobs.inner.outputs.project-workflow-sha }}
+
+permissions: {}
+
+jobs:
+  inner:
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+      pages: write
+      id-token: write
+    uses: $/.github/workflows/report.yml

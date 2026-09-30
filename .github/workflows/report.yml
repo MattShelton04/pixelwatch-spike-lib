@@ -1,0 +1,153 @@
+# PixelWatch M0.5 spike S4: stand-in for report.yml (06 §3 self-checkout).
+name: Spike report (reusable)
+
+on:
+  workflow_call:
+    outputs:
+      ingest-bundle:
+        value: ${{ jobs.ingest.outputs.bundle }}
+      ingest-nonce:
+        value: ${{ jobs.ingest.outputs.nonce }}
+      ingest-workflow-repository:
+        value: ${{ jobs.ingest.outputs.workflow-repository }}
+      ingest-workflow-sha:
+        value: ${{ jobs.ingest.outputs.workflow-sha }}
+      project-bundle:
+        value: ${{ jobs.project.outputs.bundle }}
+      project-nonce:
+        value: ${{ jobs.project.outputs.nonce }}
+      project-workflow-repository:
+        value: ${{ jobs.project.outputs.workflow-repository }}
+      project-workflow-sha:
+        value: ${{ jobs.project.outputs.workflow-sha }}
+
+permissions: {}
+
+jobs:
+  ingest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: read
+    outputs:
+      bundle: ${{ steps.bundle.outputs.bundle }}
+      nonce: ${{ steps.bundle.outputs.nonce }}
+      workflow-repository: ${{ steps.guard.outputs.repo }}
+      workflow-sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      # Runs before any checkout. Missing or malformed fields fail; there is no fallback.
+      - name: Guard self-reference fields
+        id: guard
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+          WF_REF: ${{ job.workflow_ref }}
+          CALLER_REPO: ${{ github.repository }}
+          CALLER_SHA: ${{ github.sha }}
+          CALLER_WF_REF: ${{ github.workflow_ref }}
+          CALLER_WF_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          echo "job.workflow_repository=${WF_REPO}"
+          echo "job.workflow_sha=${WF_SHA}"
+          echo "job.workflow_ref=${WF_REF}"
+          echo "github.repository=${CALLER_REPO} github.sha=${CALLER_SHA}"
+          echo "github.workflow_ref=${CALLER_WF_REF} github.workflow_sha=${CALLER_WF_SHA}"
+          if [[ ! "${WF_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::job.workflow_repository is missing or malformed"; exit 1
+          fi
+          if [[ ! "${WF_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::job.workflow_sha is missing or not a full commit SHA"; exit 1
+          fi
+          echo "repo=${WF_REPO}" >> "$GITHUB_OUTPUT"
+          echo "sha=${WF_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out own release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.guard.outputs.repo }}
+          ref: ${{ steps.guard.outputs.sha }}
+          path: _pixelwatch
+          persist-credentials: false
+
+      - name: Verify checked-out commit
+        env:
+          WF_SHA: ${{ steps.guard.outputs.sha }}
+        run: |
+          set -euo pipefail
+          head="$(git -C _pixelwatch rev-parse HEAD)"
+          echo "checked out ${head}"
+          if [[ "${head}" != "${WF_SHA}" ]]; then
+            echo "::error::checked-out HEAD ${head} != job.workflow_sha ${WF_SHA}"; exit 1
+          fi
+          sha256sum _pixelwatch/actions/publish/dist/index.js
+
+      - name: Run bundled action
+        id: bundle
+        uses: ./_pixelwatch/actions/publish
+
+  project:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      pull-requests: write
+    outputs:
+      bundle: ${{ steps.bundle.outputs.bundle }}
+      nonce: ${{ steps.bundle.outputs.nonce }}
+      workflow-repository: ${{ steps.guard.outputs.repo }}
+      workflow-sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      - name: Guard self-reference fields
+        id: guard
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+          WF_REF: ${{ job.workflow_ref }}
+          CALLER_REPO: ${{ github.repository }}
+          CALLER_SHA: ${{ github.sha }}
+          CALLER_WF_REF: ${{ github.workflow_ref }}
+          CALLER_WF_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          echo "job.workflow_repository=${WF_REPO}"
+          echo "job.workflow_sha=${WF_SHA}"
+          echo "job.workflow_ref=${WF_REF}"
+          echo "github.repository=${CALLER_REPO} github.sha=${CALLER_SHA}"
+          echo "github.workflow_ref=${CALLER_WF_REF} github.workflow_sha=${CALLER_WF_SHA}"
+          if [[ ! "${WF_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::job.workflow_repository is missing or malformed"; exit 1
+          fi
+          if [[ ! "${WF_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::job.workflow_sha is missing or not a full commit SHA"; exit 1
+          fi
+          echo "repo=${WF_REPO}" >> "$GITHUB_OUTPUT"
+          echo "sha=${WF_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out own release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.guard.outputs.repo }}
+          ref: ${{ steps.guard.outputs.sha }}
+          path: _pixelwatch
+          persist-credentials: false
+
+      - name: Verify checked-out commit
+        env:
+          WF_SHA: ${{ steps.guard.outputs.sha }}
+        run: |
+          set -euo pipefail
+          head="$(git -C _pixelwatch rev-parse HEAD)"
+          echo "checked out ${head}"
+          if [[ "${head}" != "${WF_SHA}" ]]; then
+            echo "::error::checked-out HEAD ${head} != job.workflow_sha ${WF_SHA}"; exit 1
+          fi
+          sha256sum _pixelwatch/actions/publish/dist/index.js
+
+      - name: Run bundled action
+        id: bundle
+        uses: ./_pixelwatch/actions/publish

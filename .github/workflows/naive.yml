@@ -1,0 +1,36 @@
+# PixelWatch M0.5 spike S4: NEGATIVE CONTROL. Do not copy.
+# Runs ./actions/publish from the default checkout, which is the CALLER's repository at the
+# caller's github.sha. This is the mistake 06 §3 rules out: the caller's code runs here.
+name: Spike naive control (reusable)
+
+on:
+  workflow_call:
+    outputs:
+      bundle:
+        value: ${{ jobs.naive.outputs.bundle }}
+      nonce:
+        value: ${{ jobs.naive.outputs.nonce }}
+
+permissions: {}
+
+jobs:
+  naive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      bundle: ${{ steps.bundle.outputs.bundle }}
+      nonce: ${{ steps.bundle.outputs.nonce }}
+    steps:
+      - name: Default checkout (caller repository and SHA)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Log what was checked out
+        run: |
+          git log -1 --format=%H
+          git remote get-url origin
+      - name: Run ./actions/publish (the caller's copy)
+        id: bundle
+        uses: ./actions/publish

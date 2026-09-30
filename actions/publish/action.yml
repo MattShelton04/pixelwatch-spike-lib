@@ -1,0 +1,12 @@
+name: PixelWatch spike publish bundle
+description: Stand-in for the bundled publisher (PixelWatch M0.5 spike S4). Reports its own identity.
+outputs:
+  bundle:
+    description: Bundle version baked into dist/index.js
+  nonce:
+    description: Random value baked into dist/index.js
+  bundle-sha256:
+    description: SHA-256 of the dist/index.js that ran
+runs:
+  using: node24
+  main: dist/index.js
