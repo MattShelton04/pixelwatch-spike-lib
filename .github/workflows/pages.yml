@@ -1,0 +1,103 @@
+# PixelWatch M0.5 spike S2 (production shape): the project job as a reusable workflow in the library.
+# Self-checkout (06 §3), then build + Pages deploy + readiness from the library's own scripts.
+# Checks that `environment: github-pages` and the Pages OIDC token work inside a foreign-called
+# reusable workflow.
+name: Spike pages (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      store_tip:
+        required: true
+        type: string
+      pr_numbers:
+        required: true
+        type: string
+      run_key:
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  project:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pixelwatch-pages-spike
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Guard self-reference fields
+        id: guard
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+        run: |
+          set -euo pipefail
+          echo "job.workflow_repository=${WF_REPO} job.workflow_sha=${WF_SHA}"
+          if [[ ! "${WF_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::job.workflow_repository is missing or malformed"; exit 1
+          fi
+          if [[ ! "${WF_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::job.workflow_sha is missing or not a full commit SHA"; exit 1
+          fi
+          echo "repo=${WF_REPO}" >> "$GITHUB_OUTPUT"
+          echo "sha=${WF_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out own release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.guard.outputs.repo }}
+          ref: ${{ steps.guard.outputs.sha }}
+          path: _pixelwatch
+          persist-credentials: false
+
+      - name: Verify checked-out commit
+        env:
+          WF_SHA: ${{ steps.guard.outputs.sha }}
+        run: |
+          set -euo pipefail
+          head="$(git -C _pixelwatch rev-parse HEAD)"
+          [[ "${head}" == "${WF_SHA}" ]] || { echo "::error::HEAD ${head} != ${WF_SHA}"; exit 1; }
+
+      - name: Build synthetic site (library scripts)
+        id: build
+        env:
+          STORE_TIP: ${{ inputs.store_tip }}
+          PR_NUMBERS: ${{ inputs.pr_numbers }}
+          RUN_KEY: ${{ inputs.run_key }}
+          HEAD_SHA: 5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e
+          RELEASE_COMMIT: ${{ steps.guard.outputs.sha }}
+          CONFIG_COMMIT: ${{ github.sha }}
+          OUT_DIR: _site
+          BUILT_MANIFEST: ${{ runner.temp }}/pw-built.json
+        run: node _pixelwatch/scripts/build-site.mjs
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+      - name: Deploy to Pages
+        id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      - name: Readiness (3 consecutive passing polls)
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          BUILT_MANIFEST: ${{ runner.temp }}/pw-built.json
+          TIMEOUT_S: "600"
+          LOG_FILE: ${{ runner.temp }}/readiness.jsonl
+        run: |
+          set -euo pipefail
+          SITE_URL="https://$(printf '%s' "$OWNER" | tr 'A-Z' 'a-z').github.io/${REPO_NAME}/pixelwatch/"
+          export SITE_URL
+          node _pixelwatch/scripts/probe.mjs ready
