@@ -4,8 +4,8 @@
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 
-const BUNDLE = "v1";
-const NONCE = "d77ee74f0fb9ef4f";
+const BUNDLE = "v2";
+const NONCE = "6667b07e0531783d";
 
 const bundleSha256 = crypto.createHash("sha256").update(fs.readFileSync(__filename)).digest("hex");
 const identity = {
